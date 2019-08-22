@@ -5,7 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 
 
-def get_patent(num, details=False):
+def get_patent(num, details=True):
     s = requests.Session()
     search_string = num
     search_url = 'http://patft.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&Sect2=HITOFF&p=1&u=%2Fnetahtml%2FPTO%2Fsearch' \
@@ -50,11 +50,15 @@ def get_patent(num, details=False):
 if __name__ == '__main__':
     dataset_dir = 'patent-data'
     patent_dirs = os.listdir('patent-data')
+    data_all = []
     for field in patent_dirs:
         path = dataset_dir + '/' + field
         files = os.listdir(path)
         data = []
         for file in files:
             data.append(get_patent(re.findall('\d+', file)[0]))
+        data_all.extend(data)
         with open('patents ' + field + '.json', 'w') as f:
             json.dump(data, f)
+    with open('patents_all.json', 'w') as f:
+        json.dump(data_all, f)
