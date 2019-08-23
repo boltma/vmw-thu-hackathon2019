@@ -82,13 +82,15 @@ def train_lda_model(corpus, num_topics, id2word):
         print('\nTopic', topic_id, file=lda_output)
         pprint(lda.show_topic(topic_id), stream=lda_output)
 
+    print('Visualizing LDA topics...')
     vis = pyLDAvis.gensim.prepare(lda, corpus, dictionary)
-    pyLDAvis.save_html(vis, 'visualization/LDA_Visualization.html')
+    pyLDAvis.save_html(vis, 'visualization/LDA_topics.html')
 
+    print('Visualizing LDA similarity...')
     similarity = list(similarities.MatrixSimilarity(lda[corpus]))
     print('\nSimilarity:', file=lda_output)
     pprint(similarity, stream=lda_output)
-    draw_graph(adj_matrix=similarity, threshold=0.999,
+    draw_graph(adj_matrix=similarity, threshold=0.9999,
                file_name='visualization/lda_similarity.png')
     return similarity
 
@@ -107,6 +109,7 @@ def train_hdp_model(corpus, num_topics, id2word):
     print('\nHDP Topics:', file=hdp_output)
     print(hdp.print_topics(num_topics=num_topics, num_words=5), file=hdp_output)
 
+    print('Visualizing HDP similarity...')
     similarity = list(similarities.MatrixSimilarity(hdp[corpus_tfidf]))
     print('\nSimilarity:', file=hdp_output)
     pprint(similarity, stream=hdp_output)
@@ -123,12 +126,14 @@ def draw_graph(adj_matrix, threshold, file_name):
         for j in range(i):
             if adj_matrix[i][j] > threshold:
                 G.add_edge(patent_id[i], patent_id[j], weight=adj_matrix[i][j])
-
+    for patent in patent_id:
+        if G.degree[patent] == 0:
+            G.remove_node(patent)
     pos = nx.circular_layout(G)
-    # pos = nx.kamada_kawai_layout(G)
+   # pos = nx.kamada_kawai_layout(G)
     edges, weights = zip(*nx.get_edge_attributes(G, 'weight').items())
 
-    nx.draw_networkx_nodes(G, pos)
+    nx.draw_networkx_nodes(G, pos, node_color='red')
     nx.draw_networkx_labels(G, pos)
     nx.draw_networkx_edges(G, pos, edge_cmap=plt.cm.Blues, width=2, alpha=0.5,
                            edge_color=weights)
@@ -138,28 +143,35 @@ def draw_graph(adj_matrix, threshold, file_name):
 
 
 if __name__ == '__main__':
-
     data = []
     with open('data/patents_all.json') as file:
         data = json.load(file)
-
     patent_id = []
-    doc = []
-    # 提取专利描述，切分成单词
     for patent in data:
-        abstract = patent['description']
-        abstract = re.sub('[^a-zA-Z]', ' ', abstract)
-        doc.append(abstract)
         patent_id.append(patent['id'])
     patent_num = len(patent_id)
-    texts = remove_stopwords(doc)
-    texts = make_trigrams(texts)
-    texts = lemmatization(texts)
 
-    text_output = open('models/texts.py', 'w')
-    print('Text = ', end='', file=text_output)
-    pprint(texts, stream=text_output)
+    try:
+        from models import texts
+    except ImportError:
+        print('Texts not found! Parsing from \'data/patents_all.json\'.')
+        doc = []
+        # 提取专利描述，切分成单词
+        for patent in data:
+            abstract = patent['description']
+            abstract = re.sub('[^a-zA-Z]', ' ', abstract)
+            doc.append(abstract)
 
+        texts = remove_stopwords(doc)
+        texts = make_trigrams(texts)
+        texts = lemmatization(texts)
+
+        text_output = open('models/texts.py', 'w')
+        print('Text = ', end='', file=text_output)
+        pprint(texts, stream=text_output)
+    else:
+        print('Importing pre-existing texts...')
+        texts = texts.Text
     num_topics = 15
 
     dictionary = corpora.Dictionary(texts)
@@ -168,10 +180,11 @@ if __name__ == '__main__':
 
     lda_similarity = train_lda_model(corpus_tfidf, num_topics, dictionary)
     hdp_similarity = train_hdp_model(corpus_tfidf, num_topics, dictionary)
+    print('Visualizing joint similarity...')
     joint_similarity = np.zeros((len(patent_id), len(patent_id)))
     for i in range(patent_num):
         for j in range(i):
             if lda_similarity[i][j] > 0.7 and hdp_similarity[i][j] > 0.8:
                 joint_similarity[i][j] = max(
                     [lda_similarity[i][j], hdp_similarity[i][j]])
-    draw_graph(joint_similarity, 0.9, 'visualization/joint_similarity.png')
+    draw_graph(joint_similarity, 0.8, 'visualization/joint_similarity.png')
