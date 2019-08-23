@@ -14,15 +14,17 @@ import pyLDAvis
 import pyLDAvis.gensim
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 
-import logging
-logging.basicConfig(
-    format='%(asctime)s : %(levelname)s : %(message)s', level=logging.DEBUG)
+# import logging
+# logging.basicConfig(
+#     format='%(asctime)s : %(levelname)s : %(message)s', level=logging.DEBUG)
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
+# 去除停止词
 def remove_stopwords(doc):
     print('Removing stopwords...')
     stop_list = gensim.parsing.preprocessing.STOPWORDS
@@ -48,6 +50,7 @@ def make_trigrams(texts):
 nlp = spacy.load('en', disable=['parser', 'ner'])
 
 
+# 词形还原
 def lemmatization(texts, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV']):
     """https://spacy.io/api/annotation"""
     print('Lemmatizing...')
@@ -63,10 +66,10 @@ def train_lda_model(corpus, num_topics, id2word):
     print('Training LDA model...')
 
     lda_output = open('models/lda.txt', 'w')
-
     print('LDA Model:', file=lda_output)
+
     lda = models.LdaModel(corpus, num_topics=num_topics, id2word=id2word,
-                          passes=2, alpha='auto', eta='auto', eval_every=1,
+                          passes=2, alpha='auto', eta='auto',
                           minimum_probability=0.001)
 
     doc_topic = [doc_t for doc_t in lda[corpus]]
@@ -85,8 +88,9 @@ def train_lda_model(corpus, num_topics, id2word):
     similarity = list(similarities.MatrixSimilarity(lda[corpus]))
     print('\nSimilarity:', file=lda_output)
     pprint(similarity, stream=lda_output)
-    draw_graph(adj_matrix=similarity, threshold=0.6,
+    draw_graph(adj_matrix=similarity, threshold=0.999,
                file_name='visualization/lda_similarity.png')
+    return similarity
 
 
 def train_hdp_model(corpus, num_topics, id2word):
@@ -106,11 +110,12 @@ def train_hdp_model(corpus, num_topics, id2word):
     similarity = list(similarities.MatrixSimilarity(hdp[corpus_tfidf]))
     print('\nSimilarity:', file=hdp_output)
     pprint(similarity, stream=hdp_output)
-    draw_graph(similarity, 0.6, 'visualization/hdp_similarity.png')
+    draw_graph(similarity, 0.99, 'visualization/hdp_similarity.png')
+    return similarity
 
 
 def draw_graph(adj_matrix, threshold, file_name):
-    plt.figure(dpi=128, figsize=(32, 32))
+    plt.figure(dpi=128, figsize=(40, 40))
     G = nx.Graph()
     node_num = len(patent_id)
     for i in range(node_num):
@@ -146,7 +151,7 @@ if __name__ == '__main__':
         abstract = re.sub('[^a-zA-Z]', ' ', abstract)
         doc.append(abstract)
         patent_id.append(patent['id'])
-
+    patent_num = len(patent_id)
     texts = remove_stopwords(doc)
     texts = make_trigrams(texts)
     texts = lemmatization(texts)
@@ -155,31 +160,18 @@ if __name__ == '__main__':
     print('Text = ', file=text_output)
     pprint(texts, stream=text_output)
 
-    num_topics = 20
+    num_topics = 15
 
     dictionary = corpora.Dictionary(texts)
-    V = len(dictionary)
     corpus = [dictionary.doc2bow(text) for text in texts]
     corpus_tfidf = models.TfidfModel(corpus)[corpus]
 
-   # print('TF-IDF:')
-   # for c in corpus_tfidf:
-   #     print(c)
-
-    """
-    sys.stdout = open('interactive_visualization_lsi.txt', 'w')
-    print('\nLSI Model:')
-    lsi = models.LsiModel(
-        corpus_tfidf, num_topics=num_topics, id2word=dictionary)
-    topic_result = [a for a in lsi[corpus_tfidf]]
-    pprint(topic_result)
-    print('LSI Topics:')
-    pprint(lsi.print_topics(num_topics=num_topics, num_words=5))
-    similarity = similarities.MatrixSimilarity(
-        lsi[corpus_tfidf])   # similarities.Similarity()
-    print('Similarity:')
-    similarity_matrix = list(similarity)
-    pprint(similarity_matrix)
-    """
-    train_lda_model(corpus_tfidf, num_topics, dictionary)
-    train_hdp_model(corpus_tfidf, num_topics, dictionary)
+    lda_similarity = train_lda_model(corpus_tfidf, num_topics, dictionary)
+    hdp_similarity = train_hdp_model(corpus_tfidf, num_topics, dictionary)
+    joint_similarity = np.zeros((len(patent_id), len(patent_id)))
+    for i in range(patent_num):
+        for j in range(i):
+            if lda_similarity[i][j] > 0.7 and hdp_similarity[i][j] > 0.8:
+                joint_similarity[i][j] = max(
+                    [lda_similarity[i][j], hdp_similarity[i][j]])
+    draw_graph(joint_similarity, 0.9, 'visualization/joint_similarity.png')
