@@ -1,3 +1,6 @@
+# !/usr/bin/python
+# -*- coding:utf-8 -*-
+
 import json
 import os
 import re
@@ -6,6 +9,7 @@ from bs4 import BeautifulSoup
 
 
 def get_patent(num, details=True):
+    # request data from patft
     s = requests.Session()
     search_string = num
     search_url = 'http://patft.uspto.gov/netacgi/nph-Parser?Sect1=PTO2&Sect2=HITOFF&p=1&u=%2Fnetahtml%2FPTO%2Fsearch' \
@@ -13,6 +17,7 @@ def get_patent(num, details=True):
     r = s.get(search_url)
     text = r.text
     print(num + ' finish collecting html...')
+
     soup = BeautifulSoup(text, 'html.parser')
     patent_data = dict()
     patent_data['id'] = num
@@ -26,11 +31,13 @@ def get_patent(num, details=True):
         tmp2 = tmp1[re.search('<HR>', tmp1).span()[1]:]
         patent_data['description'] = tmp2[
                                      re.search('<BR>', tmp2).span()[0]:(re.search('<CENTER>', tmp2).span()[0] - 9)]. \
-            replace('<BR><BR> ', '')
+            replace('<BR><BR>', '')
+        # remove non-number character
         patent_data['application_number'] = re.sub('[^0-9]', '',
                                                    soup.find(string=re.compile('Appl. No.:')).parent.next_sibling.text)
         patent_data['abstract'] = soup.find(string=re.compile('Abstract')).parent.findNext('p').text
 
+    # get citations from href with netacgi/nph-Parser
     patent_data['citations'] = []
     refs = soup.findAll('a', href=re.compile('netacgi/nph-Parser'))
     for ref in refs:
@@ -38,6 +45,7 @@ def get_patent(num, details=True):
         if len(tmp_number):
             patent_data['citations'].append(tmp_number)
 
+    # get prior art
     patent_data['related'] = []
     related = soup.find('b', string='Related U.S. Patent Documents')
     if related:
@@ -58,7 +66,7 @@ if __name__ == '__main__':
         for file in files:
             data.append(get_patent(re.findall('\d+', file)[0]))
         data_all.extend(data)
-        with open('patents ' + field + '.json', 'w') as f:
+        with open('data/patents ' + field + '.json', 'w') as f:
             json.dump(data, f)
-    with open('patents_all.json', 'w') as f:
+    with open('data/patents_all.json', 'w') as f:
         json.dump(data_all, f)
