@@ -32,7 +32,7 @@ def remove_stopwords(doc):
         ['example', 'embodiment', 'embodiments', 'data', 'user', 'include',
          'includes'])
     return [[word for word in line.strip().lower().split() if (
-        word not in stop_list and len(word) > 3)] for line in doc]
+            word not in stop_list and len(word) > 3)] for line in doc]
 
 
 def make_trigrams(texts):
@@ -125,7 +125,7 @@ def draw_graph(adj_matrix, threshold, file_name):
                 G.add_edge(patent_id[i], patent_id[j], weight=adj_matrix[i][j])
 
     pos = nx.circular_layout(G)
-   # pos = nx.kamada_kawai_layout(G)
+    # pos = nx.kamada_kawai_layout(G)
     edges, weights = zip(*nx.get_edge_attributes(G, 'weight').items())
 
     nx.draw_networkx_nodes(G, pos)
@@ -156,8 +156,8 @@ if __name__ == '__main__':
     texts = make_trigrams(texts)
     texts = lemmatization(texts)
 
-    text_output = open('models/texts.txt', 'w')
-    print('Text = ', file=text_output)
+    text_output = open('models/texts.py', 'w')
+    print('Text = ', end='', file=text_output)
     pprint(texts, stream=text_output)
 
     num_topics = 15
